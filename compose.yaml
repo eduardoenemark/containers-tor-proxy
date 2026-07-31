@@ -1,0 +1,22 @@
+# Example docker-compose.yaml for tor-proxy container
+version: '3.8'
+services:
+  tor-proxy:
+    image: docker.io/eduardoenemark/tor-proxy:1.1
+    container_name: tor-proxy
+    restart: always
+    stop_grace_period: 5s
+    ports:
+      # Expose the Tor proxy port
+      - "0.0.0.0:55455:55455/tcp"
+      # Optional: Expose the default Tor SOCKS port
+      - "0.0.0.0:9050:9050/tcp"
+    volumes:
+      - "~/.cache/log/tor-proxy:/var/log"
+      - "~/.cache/log/tor-proxy/privoxy:/var/log/privoxy"
+      - "~/.cache/log/tor-proxy/tor:/var/log/tor"
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 512m
