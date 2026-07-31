@@ -14,7 +14,7 @@ ENV TOR_SOCKET_PORT=55456
 ENV DEFAULT_TOR_PORT=9050
 
 # repository url
-ENV REPO_URL=https://github.com/eduardoenemark/containers/tree/main/tor-proxy
+ENV REPO_URL=https://github.com/eduardoenemark/containers-tor-proxy
 
 # build date/time
 ARG CREATED_DATETIME
