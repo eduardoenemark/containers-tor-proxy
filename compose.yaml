@@ -1,20 +1,21 @@
-# Example docker-compose.yaml for tor-proxy container
-version: '3.8'
+# tor-proxy container (Podman Compose / Docker Compose)
 services:
   tor-proxy:
-    image: docker.io/eduardoenemark/tor-proxy:1.1
+    image: docker.io/eduardoenemark/tor-proxy:1.2
     container_name: tor-proxy
     restart: always
     stop_grace_period: 5s
     ports:
-      # Expose the Tor proxy port
+      # HTTP/HTTPS forward proxy (Privoxy -> Tor)
       - "0.0.0.0:55455:55455/tcp"
-      # Optional: Expose the default Tor SOCKS port
+      # Tor SOCKS5 (usable by other machines on the network)
       - "0.0.0.0:9050:9050/tcp"
     volumes:
       - "~/.cache/log/tor-proxy:/var/log"
       - "~/.cache/log/tor-proxy/privoxy:/var/log/privoxy"
       - "~/.cache/log/tor-proxy/tor:/var/log/tor"
+      # persist Tor state (guard nodes, circuits) -> much faster bootstrap on restart
+      - "~/.cache/data/tor-proxy:/var/lib/tor"
     deploy:
       resources:
         limits:

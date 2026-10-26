@@ -10,6 +10,11 @@ read -r NAME VERSION < <(awk '
   /org.opencontainers.image.version/{gsub(to_remove_regex,"", $0); version=$0} 
   END{print name, version}' $CONTAINER_FILE)
 
+if [ -z "$NAME" ] || [ -z "$VERSION" ]; then
+    echo "ERROR: could not parse org.opencontainers.image.ref.name/version from $CONTAINER_FILE" >&2
+    exit 1
+fi
+
 podman build \
   --arch amd64 \
   --build-arg CREATED_DATETIME="$(date -u  +'%Y-%m-%dT%H:%M:%S%:z')" \

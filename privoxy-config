@@ -620,7 +620,7 @@ logfile logfile
 # debug  1024 # Log the destination for requests Privoxy didn't let through, and the reason why.
 # debug  4096 # Startup banner and warnings
 # debug  8192 # Non-fatal errors
-debug 65536 # Log applying actions
+# debug 65536 # Log applying actions (troubleshooting only - keep off in production)
 #
 #  3.2. single-threaded
 #  =====================
@@ -791,8 +791,7 @@ debug 65536 # Log applying actions
 #
 #        listen-address [::1]:8118
 #
-listen-address  127.0.0.1:55456
-listen-address  [::1]:55456
+listen-address  0.0.0.0:55455
 #
 #  4.2. toggle
 #  ============

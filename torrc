@@ -1,0 +1,11 @@
+# Tor client configuration for the tor-proxy container
+#
+# Bind SOCKS5 to all interfaces so the published 9050 port works from
+# other machines on the network. (Tor default binds to 127.0.0.1 only,
+# which would make a published port unreachable from outside.)
+# Tor logs a "non-loopback address" notice at startup - expected here:
+# this container is an intentional LAN proxy service.
+SocksPort 0.0.0.0:9050
+
+# Write notices directly to the log file (no stdout/tee pipeline needed)
+Log notice file /var/log/tor/notices.log

@@ -4,15 +4,10 @@
 FROM docker.io/debian:trixie-20251229-slim
 
 # ---------------------------------------------------------------
-# 1. Port variable – makes it easy to change the public port later
+# Public ports (fixed, documented in README):
+#   55455/tcp -> Privoxy HTTP/HTTPS forward proxy (front door)
+#   9050/tcp  -> Tor SOCKS5 (reachable from the network)
 # ---------------------------------------------------------------
-# default public listening port
-ENV TOR_PROXY_PORT=55455
-
-# internal Tor control / SOCKS port (fixed)
-ENV TOR_SOCKET_PORT=55456
-ENV DEFAULT_TOR_PORT=9050
-
 # repository url
 ENV REPO_URL=https://github.com/eduardoenemark/containers-tor-proxy
 
@@ -24,11 +19,11 @@ ENV CREATED_DATETIME=${CREATED_DATETIME}
 # 2. Labels – OCI image metadata + extra documentation labels
 # ------------------------------------------------------------------
 LABEL org.opencontainers.image.ref.name="tor-proxy" \
-      org.opencontainers.image.version="1.1" \
+      org.opencontainers.image.version="1.2" \
       org.opencontainers.image.authors="@eduardoenemark" \
       org.opencontainers.image.source="${REPO_URL}" \
-      org.opencontainers.image.title="TOR Proxy: Socat + Privoxy + TOR" \
-      org.opencontainers.image.description="A tiny container that runs Tor, wraps it in Privoxy and exposes a forward‑proxy on ${TOR_PROXY_PORT}." \
+      org.opencontainers.image.title="TOR Proxy: Privoxy + TOR" \
+      org.opencontainers.image.description="A tiny container that runs Tor, wraps it in Privoxy and exposes a forward-proxy on 55455." \
       org.opencontainers.image.created="${CREATED_DATETIME}" \
       org.opencontainers.image.licenses="GPL-3.0-only" \
       org.opencontainers.image.purpose="Privoxy HTTP/HTTPS forward proxy for Tor" \
@@ -41,31 +36,28 @@ LABEL org.opencontainers.image.ref.name="tor-proxy" \
 # 3. Install required packages
 # ------------------------------------------------------------------
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates socat privoxy tor && \
+    apt-get install -y --no-install-recommends ca-certificates privoxy tor && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /tmp/*
 
 # ---------------------------------------------------------------
-# 4. Copy our configuration files (keep them outside of the image)
+# 4. Copy our configuration files
 # ---------------------------------------------------------------
 COPY privoxy-config /etc/privoxy/config
+COPY torrc /etc/tor/torrc
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # ------------------------------------------------------------------
-# 5. Declare runtime volumes – they are useful for persistence & debugging
+# 5. Expose the public ports
 # ------------------------------------------------------------------
-VOLUME ["/var/log","/var/log/tor","/var/log/privoxy"]
+EXPOSE 55455/tcp
+EXPOSE 9050/tcp
 
 # ------------------------------------------------------------------
-# 6. Expose the public port (the value comes from the variable above)
+# 6. Entrypoint – starts Tor and Privoxy, handles SIGTERM gracefully.
+#    If either daemon dies the container exits so the restart policy
+#    (restart: always) brings everything back.
 # ------------------------------------------------------------------
-EXPOSE ${TOR_PROXY_PORT}/tcp
-EXPOSE ${DEFAULT_TOR_PORT}/tcp
-
-# ------------------------------------------------------------------
-# 7. Entrypoint – start Tor, Privoxy and Socat in the background
-# ------------------------------------------------------------------
-CMD ["/bin/bash","-c",\
-    "tor 2>&1 | tee -a /var/log/tor/notices.log & \
-     privoxy /etc/privoxy/config 2>&1 | tee -a /var/log/privoxy/logfile & \
-     socat TCP4-LISTEN:${TOR_PROXY_PORT},fork,reuseaddr TCP4:127.0.0.1:${TOR_SOCKET_PORT} 2>&1 | tee -a /var/log/socat.log"]
+CMD ["/usr/local/bin/entrypoint.sh"]

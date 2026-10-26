@@ -1,3 +1,3 @@
 #!/bin/bash
 
-podman stop tor-proxy-container
+podman stop tor-proxy

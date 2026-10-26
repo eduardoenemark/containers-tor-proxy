@@ -1,42 +1,40 @@
 # TOR Proxy Container
 
-A lightweight container that runs [Tor](https://www.torproject.org), wraps it in Privoxy, and exposes a forward-proxy on port 55455. This proxy service works well with HTTPS, offering good data communication performance.
+A lightweight container that runs [Tor](https://www.torproject.org) and wraps it in [Privoxy](https://www.privoxy.org), exposing an **HTTP/HTTPS forward proxy on port 55455** — plus Tor's native **SOCKS5 on port 9050**.
 
-It's possible to browse the web, watch videos, and download files without lag. Keep in mind that if your Internet connection is slow, your experience will be poor.
+Traffic flow: `client -> Privoxy (55455) -> Tor SOCKS5 (9050) -> Tor network`.
+Privoxy uses `forward-socks5t`, which enables the Tor *optimistic data* extension and reduces latency on the first request of each connection.
 
-When the container starts, the Tor circuit participation process is established. From start to connection establishment, it can take a few minutes. Please be patient during this time.
+## Performance expectations
 
-## What This Container Does
+Tor is inherently slower than a direct connection: expect higher latency and lower throughput. In practice you can browse the web, watch videos and download files comfortably on a decent connection — but keep in mind that some sites (banks, aggressive CDNs) block Tor exit nodes and may refuse to load at all.
 
-This container sets up a secure proxy that:
-- Routes your internet traffic through the Tor network
-- Provides both HTTP/HTTPS proxy functionality
-- Offers good performance for data communication
-- Protects your privacy by anonymizing your traffic
+On first start, Tor needs to bootstrap its circuits. This usually takes a few seconds up to a couple of minutes depending on your network. Requests made before bootstrap finishes will fail — just retry. Persisting `/var/lib/tor` (see Volumes) makes restarts much faster because guard information is kept.
 
 ## Quick Start
 
-### Using Docker Compose (Recommended)
+### Using Docker Compose (recommended)
 
 1. Create a `docker-compose.yml` file with the following content:
 
 ```yaml
-version: '3.8'
 services:
   tor-proxy:
-    image: docker.io/eduardoenemark/tor-proxy:1.1
+    image: docker.io/eduardoenemark/tor-proxy:1.2
     container_name: tor-proxy
     restart: always
     stop_grace_period: 5s
     ports:
-      # Expose the Tor proxy port
+      # HTTP/HTTPS forward proxy (Privoxy -> Tor)
       - "0.0.0.0:55455:55455/tcp"
-      # Optional: Expose the default Tor SOCKS port
+      # Tor SOCKS5 (usable by other machines on the network)
       - "0.0.0.0:9050:9050/tcp"
     volumes:
       - "~/.cache/log/tor-proxy:/var/log"
       - "~/.cache/log/tor-proxy/privoxy:/var/log/privoxy"
       - "~/.cache/log/tor-proxy/tor:/var/log/tor"
+      # persist Tor state (guard nodes, circuits) -> faster bootstrap on restart
+      - "~/.cache/data/tor-proxy:/var/lib/tor"
     deploy:
       resources:
         limits:
@@ -46,7 +44,7 @@ services:
 
 2. Run the container:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Using Podman
@@ -61,64 +59,71 @@ podman run \
   --volume ~/.cache/log/tor-proxy:/var/log \
   --volume ~/.cache/log/tor-proxy/privoxy:/var/log/privoxy \
   --volume ~/.cache/log/tor-proxy/tor:/var/log/tor \
+  --volume ~/.cache/data/tor-proxy:/var/lib/tor \
   --cpus 1 \
   --memory 512m \
-  docker.io/eduardoenemark/tor-proxy:1.1
+  docker.io/eduardoenemark/tor-proxy:1.2
 ```
 
 ## Configuration
 
 ### Ports
 
-- **55455/tcp**: HTTP/HTTPS proxy port (default).
-- **9050/tcp**: Tor SOCKS proxy port (optional).
+- **55455/tcp**: HTTP/HTTPS forward proxy (Privoxy -> Tor).
+- **9050/tcp**: Tor SOCKS5 proxy, bound to all interfaces — other machines on your network can use it directly.
 
 ### Volumes
 
-The container uses these volumes for persistent logging:
-- `/var/log`: Main log directory.
-- `/var/log/tor`: Tor service logs.
-- `/var/log/privoxy`: Privoxy service logs.
+| Container path | Purpose |
+|---|---|
+| `/var/log/tor` | Tor notices log (`notices.log`) |
+| `/var/log/privoxy` | Privoxy request log (`logfile`) |
+| `/var/lib/tor` | Tor state (guard nodes, circuits). **Persist it** — bootstrap after a restart becomes much faster. |
 
 ## Usage
 
-### For HTTP/HTTPS Traffic
+- **On the machine running the container:** use `localhost` / `127.0.0.1` as host.
+- **From other machines on your network:** use the IP or hostname of the machine running the container.
 
-Configure your applications to use the proxy:
-- Host: `localhost` or `127.0.0.1`
-- Port: `55455`
-- Protocol: HTTP/HTTPS
+### HTTP/HTTPS traffic (port 55455)
 
-### For Tor Applications
+Configure your application/browser to use an **HTTP proxy** at `<host>:55455`:
 
-If you need direct Tor access:
-- Host: `localhost` or `127.0.0.1`
-- Port: `9050`
-- Protocol: SOCKS5
+```bash
+# curl
+curl -x http://<host>:55455 https://example.com
 
-## Requirements
+# Python requests
+proxies = {"http": "http://<host>:55455", "https": "http://<host>:55455"}
+```
 
-- Docker or Podman installed on your system
-- At least 512MB RAM available for the container
-- Port 55455 (and optionally 9050) available on your host machine
+### SOCKS5 (port 9050)
+
+For applications that speak SOCKS5 directly:
+
+```bash
+curl --socks5-hostname <host>:9050 https://example.com
+```
 
 ## Logs
 
-All logs are stored in `~/.cache/log/tor-proxy/` directory on your host machine. This includes:
-- Tor service logs
-- Privoxy service logs
-- Socat service logs
+All logs are stored in `~/.cache/log/tor-proxy/` on the host:
+
+- **Tor:** `tor/notices.log` (bootstrap progress, warnings)
+- **Privoxy:** `privoxy/logfile` (one line per request; enable `debug` in `/etc/privoxy/config` only when troubleshooting)
 
 ## Security Note
 
-Always review the security implications of using any proxy service. Learn more about the Tor network before using this service.
+- The proxy has **no authentication**: anyone who can reach ports 55455/9050 can route traffic through Tor. Only expose these ports on a trusted network (your LAN).
+- Because SOCKS5 is bound to all interfaces, Tor logs a `non-loopback address` notice at startup — this is expected for this service.
+- Learn about the [Tor network](https://www.torproject.org/) before using any proxy service in production.
 
 ## Troubleshooting
 
-If you encounter issues:
-1. Check that port 55455 is not already in use.
-2. Verify that the log directories have proper permissions.
-3. Check the container logs with `docker logs tor-proxy` or `podman logs tor-proxy`.
+1. Check that ports 55455/9050 are not already in use on the host.
+2. Verify the log directories exist and are writable (Podman creates them for you).
+3. Check container logs: `docker logs tor-proxy` or `podman logs tor-proxy`.
+4. If requests fail right after a start, Tor is probably still bootstrapping — watch `tor/notices.log` until it reaches `Bootstrapped 100% (done)`.
 
 ## License
 
