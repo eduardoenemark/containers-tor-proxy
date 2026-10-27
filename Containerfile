@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------------
 # Base image – slim Debian (trixie) with the latest security updates
 # ----------------------------------------------------------------------
-FROM docker.io/debian:trixie-20251229-slim
+FROM docker.io/debian:trixie-20261005-slim
 
 # ---------------------------------------------------------------
 # Public ports (fixed, documented in README):
